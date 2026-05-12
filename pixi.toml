@@ -1,0 +1,21 @@
+[workspace]
+name = "kaichi"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64", "osx-arm64"]
+
+[dependencies]
+python = ">=3.14.4,<3.15"
+rust = ">=1.95.0,<1.96"
+c-compiler = ">=1.11.0,<2"
+cxx-compiler = "*"
+cmake = "*"
+make = ">=4.4.1,<5"
+pkg-config = ">=0.29.2,<0.30"
+anndata = ">=0.12.13,<0.13"
+muon = ">=0.1.7,<0.2"
+pandas = ">=2.3.3,<3"
+numpy = ">=2.4.3,<3"
+scipy = ">=1.17.1,<2"
+
+[tasks]
+build = "cargo install --git https://github.com/atchox/kaichi.git kaichi-cli --root $CONDA_PREFIX"
