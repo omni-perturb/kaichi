@@ -77,7 +77,7 @@ def main() -> None:
     out.var = adata_guides.var.loc[out.var_names].copy()
     out.uns["guide_assignment_params"] = {"model": args.model}
 
-    n_assigned = int((out.obs["guide_identity"].astype(str) != "").sum())
+    n_assigned = int((~out.obs["is_unassigned"].astype(bool)).sum())
     n_total = out.n_obs
     print(
         f"  {n_assigned}/{n_total} cells assigned ({100 * n_assigned / n_total:.1f}%)",
