@@ -77,6 +77,24 @@ def main() -> None:
     out.var = adata_guides.var.loc[out.var_names].copy()
     out.uns["guide_assignment_params"] = {"model": args.model}
 
+    # Preserve input obs columns (e.g. batch) not written by kaichi
+    input_extra = adata_guides.obs.drop(
+        columns=[c for c in adata_guides.obs.columns if c in out.obs.columns],
+        errors="ignore",
+    )
+    out.obs = out.obs.join(input_extra)
+
+    # kaichi calls this n_guides_detected; rename to n_guides_assigned for consistency
+    if "n_guides_detected" in out.obs.columns:
+        out.obs = out.obs.rename(columns={"n_guides_detected": "n_guides_assigned"})
+
+    # target_gene for singly-assigned cells (multi-infected and unassigned get "")
+    if "target_gene" in out.var.columns:
+        guide_to_gene = out.var["target_gene"].to_dict()
+        out.obs["target_gene"] = out.obs["guide_identity"].apply(
+            lambda g: guide_to_gene.get(g, "") if g and "," not in g else ""
+        )
+
     n_assigned = int((~out.obs["is_unassigned"].astype(bool)).sum())
     n_total = out.n_obs
     print(
