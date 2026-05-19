@@ -9,7 +9,7 @@ import muon as mu
 import kaichi
 
 
-MODELS = ["umi", "max", "ratio", "poisson_gauss"]
+MODELS = ["umi", "max", "ratio", "poisson_gauss", "beta2", "beta3", "neg_binomial"]
 
 
 def parse_args() -> argparse.Namespace:
@@ -52,7 +52,7 @@ def main() -> None:
     try:
         adata_guides.write_h5ad(tmp_path)
         print(f"Running kaichi.assign(model={args.model!r}) ...", file=sys.stderr)
-        out = kaichi.assign(tmp_path, model=args.model)
+        out = kaichi.assign(tmp_path, model=args.model, n_jobs=16)
     finally:
         os.unlink(tmp_path)
 
