@@ -2,12 +2,11 @@
 
 import argparse
 import os
-import subprocess
 import sys
 import tempfile
 
-import anndata as ad
 import muon as mu
+import kaichi
 
 
 MODELS = ["umi", "max", "ratio", "poisson_gauss"]
@@ -47,52 +46,42 @@ def main() -> None:
     if adata_guides.n_vars == 0:
         raise ValueError("crispr modality is empty")
 
-    out_path = os.path.join(args.output_dir, f"{args.name}.h5ad")
-
+    # kaichi.assign() takes an h5ad path; write the crispr modality to a temp h5ad.
     with tempfile.NamedTemporaryFile(suffix=".h5ad", delete=False) as tmp:
         tmp_path = tmp.name
     try:
         adata_guides.write_h5ad(tmp_path)
-        print(f"Running kaichi {args.model} ...", file=sys.stderr)
-        subprocess.run(
-            [
-                "kaichi",
-                "assign",
-                "--counts",
-                tmp_path,
-                "--model",
-                args.model,
-                "--output",
-                out_path,
-            ],
-            check=True,
-        )
+        print(f"Running kaichi.assign(model={args.model!r}) ...", file=sys.stderr)
+        out = kaichi.assign(tmp_path, model=args.model)
     finally:
         os.unlink(tmp_path)
 
-    # kaichi writes a minimal .var (guide IDs only). Re-attach input's var
+    # kaichi returns a minimal .var (guide IDs only). Re-attach input's var
     # metadata (target_gene, sequence, etc.) so the output matches crispat's shape.
     print("Merging input .var metadata ...", file=sys.stderr)
-    out = ad.read_h5ad(out_path)
     out.var = adata_guides.var.loc[out.var_names].copy()
     out.uns["guide_assignment_params"] = {"model": args.model}
 
-    # Preserve input obs columns (e.g. batch) not written by kaichi
+    # Preserve input obs columns (e.g. batch) not written by kaichi.
     input_extra = adata_guides.obs.drop(
         columns=[c for c in adata_guides.obs.columns if c in out.obs.columns],
         errors="ignore",
     )
     out.obs = out.obs.join(input_extra)
 
-    # kaichi calls this n_guides_detected; rename to n_guides_assigned for consistency
+    # kaichi calls this n_guides_detected; rename to n_guides_assigned for consistency.
     if "n_guides_detected" in out.obs.columns:
         out.obs = out.obs.rename(columns={"n_guides_detected": "n_guides_assigned"})
 
-    # target_gene for singly-assigned cells (multi-infected and unassigned get "")
+    # target_gene for singly-assigned cells (multi-infected and unassigned get "").
     if "target_gene" in out.var.columns:
         guide_to_gene = out.var["target_gene"].to_dict()
-        out.obs["target_gene"] = out.obs["guide_identity"].apply(
-            lambda g: guide_to_gene.get(g, "") if g and "," not in g else ""
+        single = ~out.obs["is_unassigned"].astype(bool) & ~out.obs[
+            "is_multi_infected"
+        ].astype(bool)
+        out.obs["target_gene"] = ""
+        out.obs.loc[single, "target_gene"] = (
+            out.obs.loc[single, "guide_id"].map(guide_to_gene).fillna("")
         )
 
     n_assigned = int((~out.obs["is_unassigned"].astype(bool)).sum())
@@ -102,6 +91,7 @@ def main() -> None:
         file=sys.stderr,
     )
 
+    out_path = os.path.join(args.output_dir, f"{args.name}.h5ad")
     print(f"Writing {out_path} ...", file=sys.stderr)
     out.write_h5ad(out_path)
 
